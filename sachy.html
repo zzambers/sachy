@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Sachy</title>
+<style>
+.display-toggle { display: none; }
+.display-toggle:checked + form { display: none; }
+
+.chess-table > tr:nth-child(even) > td:nth-child(even), .chess-table > tr:nth-child(odd) > td:nth-child(odd) {
+    background-color: lightyellow; border-color: lightyellow; border-style:solid; user-select: none;
+}
+.chess-table > tr:nth-child(odd) > td:nth-child(even), .chess-table > tr:nth-child(even) > td:nth-child(odd) {
+    background-color: sandybrown; border-color: sandybrown; border-style:solid; user-select: none;
+}
+#board .selectable-square { cursor: cell;}
+#board .selected-square { border-color: green; border-style:solid; }
+#board .move-square { cursor: pointer; border-color: purple; border-style:dotted; }
+#board .checked-king { color: red; }
+#board > table { border-spacing: 0;  margin-left: auto;  margin-right: auto;}
+#board table, td { padding: 0; }
+#board td { font-size: xx-large; width: 1.25em; height: 1.25em; text-align: center; }
+#board th { font-size: small;  width: 1em; height: 1.25em; color: gray; text-align: center; }
+</style>
+<script type="text/javascript" src="sachy.js" defer></script>
+</head>
+<body onload="startGame()">
+
+<div style="text-align: center;">
+<label for="new-game-toggle" style="font-size:small">New Game</label>
+<input type="checkbox" class="display-toggle" id="new-game-toggle" />
+<form>
+<label for="white-sel">White:</label>
+<select name="white" id="white">
+  <option value="0" selected>Human</option>
+  <option value="1">AI</option>
+  <option value="2">AI-random</option>
+</select>
+<label for="black-sel">Black:</label>
+<select name="black" id="black">
+  <option value="0">Human</option>
+  <option value="1" selected>AI</option>
+  <option value="2">AI-random</option>
+</select>
+<input type="submit" value="Start" />
+</form>
+</div>
+<div style="text-align: center;">
+<span id="game-info-text"></span>
+</div>
+
+<div id="board"></div>
+
+</body>
+</html>
