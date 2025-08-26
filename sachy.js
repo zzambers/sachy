@@ -6,11 +6,13 @@ function State() {
     this.prevState = null;
     this.board = null;
     this.player = 0;
+    this.nextState = null;
 }
 function StateProto() {
     this.getDerivedState = getDerivedState;
     this.getOponentState = getOponentState;
     this.getBoardValue = getBoardValue;
+    this.isLastState = isLastState;
     this.getKind = getKind;
     this.getPlayer = getPlayer;
     this.getTag = getTag;
@@ -101,6 +103,10 @@ function getBoardValue(c, r) {
         throw "Invalid board coordinates!"; // should not happen.
     }
     return this.board[r * 8 + c];
+}
+
+function isLastState() {
+    return !this.nextState;
 }
 
 function getKind(value) {
@@ -389,6 +395,7 @@ function Game() {
     this.scores = [0, 0];
     // UI
     this.boardOrientation = 0;
+    this.shownState = this.curState;
     this.selected = false;
     this.selRow = 0;
     this.selCol = 0;
@@ -408,6 +415,7 @@ function GameProto() {
     this.prepareBoard = prepareBoard;
     this.prepareColLables = prepareColLables;
     this.prepareRowLable = prepareRowLable;
+    this.prepareHistoryButtons = prepareHistoryButtons;
     this.getSquareElem = getSquareElem;
     this.removeElemChild = removeElemChild;
     this.updateBoard = updateBoard;
@@ -449,7 +457,12 @@ function isValidMove(state, c1, r1, c2, r2) {
 }
 
 function makeMove(c1, r1, c2, r2, e) {
-    this.curState = this.curState.getDerivedState(c1, r1, c2, r2, e);
+    var origState = this.curState;
+    this.curState = origState.getDerivedState(c1, r1, c2, r2, e);
+    if (this.shownState === origState) {
+        this.shownState = this.curState; // update shown state
+    }
+    origState.nextState = this.curState;
     this.checkGameOver();
     this.scheduleEngine();
 }
@@ -619,8 +632,48 @@ function prepareBoard() {
     this.infoE = document.getElementById("game-info-text");
     this.rowLableElems = rowLables;
     this.colLabeElems = columnLabels;
+
 }
 
+function prepareHistoryButtons() {
+    var game = this;
+    var divE = document.getElementById("history");
+    function createHistoryButton(name) {
+        var button = document.createElement("button");
+        var content = document.createTextNode(name);
+        button.appendChild(content);
+        divE.appendChild(button);
+        return button;
+    }
+    var fisrtB = createHistoryButton("|<");
+    fisrtB.onclick = function () {
+        while (game.shownState.prevState) {
+            game.shownState = game.shownState.prevState;
+        }
+        game.updateBoard();
+    }
+    var prevB = createHistoryButton("<");
+    prevB.onclick = function () {
+        if (game.shownState.prevState) {
+            game.shownState = game.shownState.prevState;
+            game.updateBoard();
+        }
+    }
+    var nextB = createHistoryButton(">");
+    nextB.onclick = function () {
+        if (game.shownState.nextState) {
+            game.shownState = game.shownState.nextState;
+            game.updateBoard();
+        }
+    }
+    var lastB = createHistoryButton(">|");
+    lastB.onclick = function () {
+        while (game.shownState.nextState) {
+            game.shownState = game.shownState.nextState;
+        }
+        game.updateBoard();
+    }
+}
 
 function getSquareElem(col, row) {
     var index = this.boardOrientation ? row * 8 + (7 - col) : (7 - row)*8+col;
@@ -647,23 +700,24 @@ function updateBoard() {
         labE.appendChild(document.createTextNode(this.rowLabels[index]));
     }
     var kingAttacked = 0;
+    var shownState = this.shownState;
     for (var row = 0; row < 8; ++row) {
         for (var col = 0; col < 8; ++col) {
             var squareE = this.getSquareElem(col, row);
             this.removeElemChild(squareE);
             squareE.removeAttribute("class");
-            var piece = this.curState.getBoardValue(col, row)
+            var piece = shownState.getBoardValue(col, row)
             if (piece) {
-                var player = this.curState.getPlayer(piece);
-                var kind = this.curState.getKind(piece);
+                var player = shownState.getPlayer(piece);
+                var kind = shownState.getKind(piece);
                 var pieceChar = player ? this.piecesB[kind] : this.piecesW[kind];
-                if (player === this.curState.player && this.playerKinds[player] == 0 && !this.gameOver) {
+                if (shownState.isLastState() && player === shownState.player && this.playerKinds[player] == 0 && !this.gameOver) {
                     squareE.setAttribute("class", "selectable-square");
                 }
                 var spanE = document.createElement("span");
                 squareE.appendChild(spanE);
-                if (kind === 6 && player === this.curState.player  // king of current player
-                    && !this.testKingOK(this.curState.getOponentState())) {
+                if (kind === 6 && player === shownState.player  // king of current player
+                    && !this.testKingOK(shownState.getOponentState())) {
                     spanE.setAttribute("class", "checked-king");
                 }
                 var txtE = document.createTextNode(pieceChar);
@@ -671,7 +725,7 @@ function updateBoard() {
             }
         }
     }
-    if (this.selected) {
+    if (shownState.isLastState() && this.selected) {
         this.getSquareElem(this.selCol, this.selRow).setAttribute("class", "selected-square");
         var game = this;
         var col = this.selCol;
@@ -697,7 +751,8 @@ function updateBoard() {
 function clickedBoardSquare(col, row) {
     var state = this.curState;
     var player = state.player;
-    if (this.playerKinds[player] == 0 && !this.gameOver) { // human player
+    if (this.playerKinds[player] == 0  // human player
+        && this.shownState.isLastState() && !this.gameOver) {
         col = this.boardOrientation ? 7 - col : col;
         row = this.boardOrientation ? row : 7 - row;
         var val = state.getBoardValue(col, row);
@@ -730,6 +785,7 @@ function setOption(name,value) {
 function start() {
     this.boardOrientation = this.playerKinds[0] && !this.playerKinds[1];
     this.prepareBoard();
+    this.prepareHistoryButtons();
     this.updateBoard();
     this.scheduleEngine();
 }
