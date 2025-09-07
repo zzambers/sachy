@@ -9,6 +9,7 @@ function State() {
     this.nextState = null;
 }
 function StateProto() {
+    this.isEqual = isEqual;
     this.getDerivedState = getDerivedState;
     this.getOponentState = getOponentState;
     this.getBoardValue = getBoardValue;
@@ -43,6 +44,18 @@ function createInitialState() {
     state.board = board;
     state.player = 0; // white
     return state;
+}
+
+function isEqual(state) {
+    if (this.player != state.player) {
+        return 0;
+    }
+    for (var i = 0; i < this.board.length; ++i) {
+        if (this.board[i] != state.board[i]) {
+            return 0;
+        }
+    }
+    return 1;
 }
 
 function getDerivedState(c1, r1, c2, r2, extra) {
@@ -422,6 +435,8 @@ function GameProto() {
     this.setOnclickCallback = setOnclickCallback;
     this.clickedBoardSquare = clickedBoardSquare;
     this.makeMove = makeMove;
+    this.replayMoves = replayMoves;
+    this.getMovesStr = getMovesStr;
     this.runAiCallback = runAiCallback;
     this.evalState = evalState;
     this.evalStateForPlayer = evalStateForPlayer;
@@ -445,11 +460,13 @@ function processValidMoves(state, callback) {
     explorer.processBoard();
 }
 
-function isValidMove(state, c1, r1, c2, r2) {
+function isValidMove(state, c1, r1, c2, r2, ex) {
     var result = false;
-    function callback(c, r) {
+    function callback(c, r, e) {
         if (this.column == c1 && this.row == r1 && c == c2 && r == r2) {
-            result = true;
+            if (!e || e <= 1 || e >= 6 || e == ex) {
+                result = true;
+            }
         }
     }
     processValidMoves(state, callback);
@@ -464,7 +481,6 @@ function makeMove(c1, r1, c2, r2, e) {
     }
     origState.nextState = this.curState;
     this.checkGameOver();
-    this.scheduleEngine();
 }
 
 function checkGameOver() {
@@ -484,6 +500,54 @@ function checkGameOver() {
         }
         this.gameOver = 1;
     }
+}
+
+function replayMoves(movesStr) {
+    var moves = movesStr.split(".");
+    for (var i = 0; i < moves.length; ++i) {
+        var move = moves[i];
+        var c1 = move.charCodeAt(0) - 97;
+        var r1 = move.charCodeAt(1) - 49;
+        var c2 = move.charCodeAt(2) - 97;
+        var r2 = move.charCodeAt(3) - 49;
+        var e = 5;
+        if (move.len == 5) {
+            var eStr = move.charCodeAt(4);
+            e = eStr == 'r' ? 2 :
+                eStr == 'n' ? 3 :
+                eStr == 'b' ? 4 : 5;
+        }
+        if (!this.isValidMove(this.curState, c1, r1, c2, r2, e)) {
+            console.log("Invalid move: " + move);
+            return;
+        }
+        this.makeMove(c1, r1, c2, r2, e);
+    }
+}
+
+function getMovesStr() {
+    var state = this.curState;
+    var moves = "";
+    while (state.prevState) {
+        var prevState = state.prevState;
+        var move;
+        function callback(c, r, e) {
+            var state2 = this.state.getDerivedState(this.column, this.row, c, r, e);
+            if (state.isEqual(state2)) {
+                //console.log("c1 " + this.column + " r1 " + this.row + " c2 " + c + " r2 " + r);
+                move = String.fromCharCode(this.column + 97, this.row + 49, c + 97, r + 49);
+                if (e && e > 1 && e < 6) {
+                    move += e == 2 ? "r" :
+                            e == 3 ? "n" :
+                            e == 4 ? "b" : "q";
+                }
+            }
+        }
+        this.processValidMoves(prevState, callback);
+        moves = moves == "" ? move : move + "." + moves;
+        state = prevState;
+    }
+    return moves;
 }
 
 // AI
@@ -565,6 +629,7 @@ function aiMakeMove() {
     console.log("moves: " + moveCount + ", chosen: " + randomIndex);
     var movesBase = randomIndex * 5;
     this.makeMove(moves[movesBase], moves[movesBase + 1], moves[movesBase + 2], moves[movesBase + 3], moves[movesBase + 4]);
+    this.scheduleEngine();
     this.updateBoard();
     console.log("evalCnt: " + this.evalCnt + " mateCnt: " + this.mateCnt);
 }
@@ -673,6 +738,12 @@ function prepareHistoryButtons() {
         }
         game.updateBoard();
     }
+    var br = document.createElement("br");
+    divE.appendChild(br);
+    var saveB = createHistoryButton("save");
+    saveB.onclick = function () {
+        window.location.search = "white=" + game.playerKinds[0] + "&black=" + game.playerKinds[1] + "&moves=" + game.getMovesStr();
+    }
 }
 
 function getSquareElem(col, row) {
@@ -761,8 +832,9 @@ function clickedBoardSquare(col, row) {
             this.selCol = col;
             this.selected = true
         } else {
-            if (this.selected && this.isValidMove(this.curState, this.selCol, this.selRow, col, row)) {
+            if (this.selected && this.isValidMove(this.curState, this.selCol, this.selRow, col, row, 5)) {
                 this.makeMove(this.selCol, this.selRow, col, row, 5); // currently always promote to qeen
+                this.scheduleEngine();
             }
             this.selected = false
         }
@@ -775,10 +847,13 @@ function setOption(name,value) {
         case "white":
         case "black":
             this.playerKinds[name == "white" ? 0 : 1] = value | 0;
+            document.getElementById(name).value = value;
+            break;
+        case "moves":
+            this.replayMoves(value);
             break;
         default: console.log("Unknown name: " + name);
     }
-    document.getElementById(name).value = value;
 }
 
 
