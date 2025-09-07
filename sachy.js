@@ -511,8 +511,8 @@ function replayMoves(movesStr) {
         var c2 = move.charCodeAt(2) - 97;
         var r2 = move.charCodeAt(3) - 49;
         var e = 5;
-        if (move.len == 5) {
-            var eStr = move.charCodeAt(4);
+        if (move.length == 5) {
+            var eStr = move.charAt(4);
             e = eStr == 'r' ? 2 :
                 eStr == 'n' ? 3 :
                 eStr == 'b' ? 4 : 5;
